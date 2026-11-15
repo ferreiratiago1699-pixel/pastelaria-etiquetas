@@ -62,7 +62,7 @@ button{font:inherit;background:var(--acc);color:#fff;border:0;border-radius:4px;
   <label>Mostrar informação nutricional<select id="nu"><option value="1">Sim (valores médios estimados)</option><option value="0">Não</option></select></label>
   <label>Conservação<input id="cons" value="Conservar em local fresco e seco, ao abrigo da luz."></label>
   <h2>Data e lote</h2>
-  <div class="row"><label>Validade em dias (a contar de hoje)<input id="dd" type="number" min="0" value="30"></label><label>Lote<input id="lt" placeholder="vazio = linha em branco"></label></div>
+  <div class="row"><label>Validade em dias (a contar de hoje)<input id="dd" type="number" min="0" value="30"></label><label>Nº da fornada (lote = data de hoje + este número)<input id="lt" placeholder="ex.: 1"></label></div>
   <div class="pill" id="dpv"></div>
   <div class="row"><label>Data fixa (opcional, substitui o cálculo)<input id="dv" type="date"></label><button id="dl" type="button">Limpar data fixa</button></div>
   <label>Vestígios (igual ao site; produtos com aviso próprio usam o deles)<input id="vest" value="Pode conter vestígios de outros alergénios."></label>
@@ -85,7 +85,7 @@ button{font:inherit;background:var(--acc);color:#fff;border:0;border-radius:4px;
    <li>Passas e fruta cristalizada com sulfitos? Se sim, acrescentar.</li>
    <li>Mimos de Canela: confirmar que a farinha usada no lugar de queques e muffin está certa. A canela entra só na lista de ingredientes da etiqueta.</li>
    <li>Valores nutricionais: calculados com a tabela do INSA. Podem ser afinados com os rótulos (manteiga com sal, leite meio gordo UHT, farinha tipo 55/150 média). Para os esconder, escolher "Não" em Mostrar informação nutricional.</li>
-   <li>Peso líquido e validade: preencher na lista de produtos e nos campos de data. Lote: escrever à mão ou carimbar.</li>
+   <li>Peso líquido e validade: preencher na lista de produtos e nos campos de data. Lote: a data de hoje vem automática; acrescente o nº da fornada (cada fornada leva o seu).</li>
    <li>Impressão: Ctrl+P, A4, margens Nenhuma, escala 100 % (não usar Ajustar à página). Ver a pré-visualização antes de imprimir.</li>
   </ul>
  </div>
@@ -266,6 +266,7 @@ const f=(x,d)=>x.toFixed(d).replace(".",",");
 function nf(x){ if(x<0.05)return "0"; return f(x,1); }
 function dataEt(){ const v=$("dv").value; if(/^\d{4}-\d{2}-\d{2}$/.test(v)){ const [y,m,d]=v.split("-"); return d+"/"+m+"/"+y; }
  const n=Math.floor(+$("dd").value); if(!(n>0))return ""; const d=new Date(); d.setDate(d.getDate()+n); return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
+function loteTxt(){ const d=new Date(); const b=String(d.getDate()).padStart(2,"0")+String(d.getMonth()+1).padStart(2,"0")+String(d.getFullYear()).slice(2); const n=$("lt").value.trim(); return n?b+"-"+n:b; }
 function dataTxt(){ return dataEt()||"____/____/______"; }
 function etq(p,s,c){
  const v=c.per100;
@@ -292,7 +293,7 @@ function etq(p,s,c){
  '<tr><td>Fibra</td><td>'+nf(v[5])+' g</td></tr>'+
  '<tr><td>Proteínas</td><td>'+nf(v[6])+' g</td></tr>'+
  '<tr><td>Sal</td><td>'+salt+' g</td></tr></table>':'')+'</div>'+
- '<div class="ft"><b>Consumir de preferência antes de:</b> '+dataTxt()+' &nbsp; <b>Lote:</b> '+($("lt").value.trim()||"__________")+'<br>'+
+ '<div class="ft"><b>Consumir de preferência antes de:</b> '+dataTxt()+' &nbsp; <b>Lote:</b> '+loteTxt()+'<br>'+
  $("op_n").value+' · '+$("op_m").value+($("op_c").value?' · '+$("op_c").value:'')+'</div>';
  return e;
 }
@@ -300,6 +301,7 @@ function yPeso(p,s){ if(!p.bu||!s.wset)return null; const m=String(s.w).replace(
 function render(){
  const sh=$("sheet"); sh.innerHTML="";
  $("dpv").textContent=dataEt()?("Data na etiqueta: "+dataEt()+($("dv").value?" (data fixa)":" (hoje + "+Math.floor(+$("dd").value)+" dias)")):"Sem data: fica uma linha em branco para escrever à mão.";
+ $("dpv").textContent+="  Lote na etiqueta: "+loteTxt()+".";
  sh.className="sheet"+($("gd").value==="0"?" sg":"");
  const bn=t=>{const a=document.createElement("div");a.className="warn pan";a.textContent=t;sh.appendChild(a);};
  const W=+$("w").value||100,H=+$("h").value||65,m=+$("mg").value||0,g=+$("gp").value||0;
