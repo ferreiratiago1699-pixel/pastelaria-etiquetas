@@ -205,7 +205,7 @@ function buildList(){
   l.innerHTML='<input type="checkbox" '+(s.on?"checked":"")+'><span></span><input type="number" min="1" value="'+s.n+'" title="cópias"><input type="text" value="'+s.w+'" title="peso líquido"><button type="button" class="so" title="Imprimir só este produto">Só este</button>';
   l.children[1].textContent=p.nome;
   const [c,,n,w]=l.children;
-  c.onchange=()=>{s.on=c.checked;save();render()};
+  c.onchange=()=>{s.on=c.checked;save();novos();render()};
   n.oninput=()=>{s.n=Math.max(1,+n.value||1);save();render()};
   w.oninput=()=>{s.w=w.value;s.wset=true;save();render()};
   l.querySelector('.so').onclick=()=>{ PRODS.forEach(q=>{ st.p[q.id].on=(q.id===p.id); }); save(); buildList(); render(); };
@@ -215,13 +215,13 @@ function buildList(){
 function novos(){
  const box=$("novos"); box.innerHTML="";
  const need=new Map();
- PRODS.forEach(p=>missing(p).forEach(m=>{ const o=need.get(m.k)||{k:m.k,un:false,l:false}; o.un=o.un||m.un; o.l=o.l||m.l; need.set(m.k,o); }));
+ if(st.edit&&ING[st.edit]){ const un=PRODS.some(p=>p.r.some(([k,,u])=>k===st.edit&&String(u).toLowerCase()==="un")); need.set(st.edit,{k:st.edit,un,l:false,edit:true}); }
+ PRODS.filter(p=>{ const s=st.p[p.id]; return !s||s.on; }).forEach(p=>missing(p).forEach(m=>{ const o=need.get(m.k)||{k:m.k,un:false,l:false}; o.un=o.un||m.un; o.l=o.l||m.l; need.set(m.k,o); }));
  const ed=$("edi"); const used=new Set(); PRODS.forEach(p=>p.r.forEach(([k])=>{ if(ING[k])used.add(k); }));
  ed.innerHTML='<option value="">Escolher ingrediente...</option>'; [...used].sort().forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=k; if(st.edit===k)o.selected=true; ed.appendChild(o); });
- ed.onchange=()=>{ st.edit=ed.value; save(); novos(); };
- if(st.edit&&ING[st.edit]&&!need.has(st.edit)){ const un=PRODS.some(p=>p.r.some(([k,,u])=>k===st.edit&&u==="Un")); need.set(st.edit,{k:st.edit,un,l:false}); }
+ ed.onchange=()=>{ st.edit=ed.value; save(); novos(); box.scrollIntoView({block:"nearest"}); };
  if(!need.size)return;
- const h=document.createElement("h2"); h.textContent="Ingredientes novos: preencher composição"; box.appendChild(h);
+ const h=document.createElement("h2"); h.textContent=st.edit?"Editar composição e ingredientes em falta":"Ingredientes em falta: preencher composição"; box.appendChild(h);
  need.forEach(o=>{
   const d=document.createElement("div"); d.className="nv"; d.dataset.k=o.k;
   const cur=ING[o.k]||{n:o.k.toLowerCase(),v:Array(8).fill(0),a:[]};
@@ -229,14 +229,16 @@ function novos(){
   d.innerHTML='<b></b><label>Nome na lista de ingredientes<input class="n"></label><div class="g">'+lab.map((t,i)=>'<label>'+t+'<input type="number" step="any" class="v" value="'+cur.v[i]+'"></label>').join("")+'</div>'+
    (o.un?'<label>Gramas por unidade<input type="number" step="any" class="un" value="'+(cur.un||"")+'"></label>':'')+
    '<div class="al">'+Object.keys(ALER).map(a=>'<label><input type="checkbox" class="a" value="'+a+'" '+((cur.a||[]).includes(a)?"checked":"")+'>'+ALER[a]+'</label>').join("")+'</div>';
-  d.querySelector("b").textContent=o.k+" (valores por 100 g)";
+  d.querySelector("b").textContent=(o.edit?"A editar: ":"Em falta: ")+o.k+" (valores por 100 g)";
+  d.addEventListener("input",()=>{ d.dataset.dirty="1"; });
   d.querySelector(".n").value=cur.n;
   box.appendChild(d);
  });
- const bt=document.createElement("button"); bt.textContent="Guardar ingredientes"; bt.type="button";
+ const bt=document.createElement("button"); bt.textContent="Guardar alterações"; bt.type="button";
  bt.onclick=()=>{
   box.querySelectorAll(".nv").forEach(d=>{
-   const k=d.dataset.k, o={n:d.querySelector(".n").value.trim()||k.toLowerCase(), v:[...d.querySelectorAll(".v")].map(x=>+x.value||0), a:[...d.querySelectorAll(".a:checked")].map(x=>x.value)};
+   if(!d.dataset.dirty)return;
+   const k=d.dataset.k, o=Object.assign({},ING[k]||{},{n:d.querySelector(".n").value.trim()||k.toLowerCase(), v:[...d.querySelectorAll(".v")].map(x=>+x.value||0), a:[...d.querySelectorAll(".a:checked")].map(x=>x.value)});
    const u=d.querySelector(".un"); if(u&&+u.value>0)o.un=+u.value;
    if(ING[k]&&ING[k].dens)o.dens=ING[k].dens;
    st.ing[k]=o; ING[k]=o;
