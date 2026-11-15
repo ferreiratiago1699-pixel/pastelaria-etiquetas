@@ -169,7 +169,7 @@ function calc(p,yieldKg){
   let y;
   if(yieldKg!=null) y=yieldKg*1000;
   else if(p.y!=null) y=p.y*1000;
-  else { y=raw*0.85; warn.push("Rendimento do lote não guardado na app: estimado em 85 % do peso das matérias-primas. Ajuste-o."); }
+  else { y=raw*0.85; warn.push(p.bu?"Indique o peso líquido de cada unidade (por exemplo 800 g) na lista à esquerda. O lote rende "+p.bu+" unidades. Até lá, o rendimento está estimado em 85 % das matérias-primas.":"Rendimento do lote não guardado na app: estimado em 85 % do peso das matérias-primas. Ajuste-o."); }
   if(y>raw){ y=raw; warn.push("O rendimento guardado é superior ao peso das matérias-primas. Foi usado o peso das matérias-primas."); }
   if(/noz/i.test(p.nome)&&!p.r.some(([k])=>/noz/i.test(k))){ al.add("frutos"); }
   const per100=tot.map(x=>x/y*100);
@@ -200,14 +200,14 @@ function status(){ $("impst").textContent=(st.badw&&st.badw.length?"Pesos médio
 function buildList(){
  const box=$("prods"); box.innerHTML="";
  PRODS.forEach(p=>{
-  const s=st.p[p.id]||(st.p[p.id]={on:LIVE.includes(p.id),n:1,w:"250 g"});
+  const s=st.p[p.id]||(st.p[p.id]={on:LIVE.includes(p.id),n:1,w:p.bu?"":"250 g"}); if(p.bu&&!s.wset)s.w="";
   const l=document.createElement("label");
   l.innerHTML='<input type="checkbox" '+(s.on?"checked":"")+'><span></span><input type="number" min="1" value="'+s.n+'" title="cópias"><input type="text" value="'+s.w+'" title="peso líquido"><button type="button" class="so" title="Imprimir só este produto">Só este</button>';
   l.children[1].textContent=p.nome;
   const [c,,n,w]=l.children;
   c.onchange=()=>{s.on=c.checked;save();render()};
   n.oninput=()=>{s.n=Math.max(1,+n.value||1);save();render()};
-  w.oninput=()=>{s.w=w.value;save();render()};
+  w.oninput=()=>{s.w=w.value;s.wset=true;save();render()};
   l.querySelector('.so').onclick=()=>{ PRODS.forEach(q=>{ st.p[q.id].on=(q.id===p.id); }); save(); buildList(); render(); };
   box.appendChild(l);
  });
@@ -253,7 +253,7 @@ $("imp").addEventListener("change",e=>{
   const mw={}, bad=[]; (j.masterIngs||[]).forEach(m=>{ if(m.avgWeightG){ if(m.avgWeightG>=1)mw[m.name]=m.avgWeightG; else bad.push(m.name+" ("+m.avgWeightG+" g)"); } });
   st.badw=bad;
   Object.keys(mw).forEach(k=>{ if(ING[k]&&ING[k].un!==mw[k]){ const o=Object.assign({},ING[k],{un:mw[k]}); ING[k]=o; st.ing[k]=o; } });
-  const out=j.state.filter(x=>x&&Array.isArray(x.ingredients)&&x.ingredients.length).map(x=>({id:String(x.id),nome:NOMES[String(x.id)]||String(x.name).replace(/^[^\p{L}\p{N}]+/u,"").trim(),y:(!x.isSingular&&x.batchKg>0?+x.batchKg:null),r:x.ingredients.map(i=>[ALIAS[i.name]||i.name,+i.qty,UNM[String(i.unit).toLowerCase()]||i.unit]).concat(ADD[String(x.id)]||[])}));
+  const out=j.state.filter(x=>x&&Array.isArray(x.ingredients)&&x.ingredients.length).map(x=>({id:String(x.id),nome:NOMES[String(x.id)]||String(x.name).replace(/^[^\p{L}\p{N}]+/u,"").trim(),y:(!x.isSingular&&x.batchKg>0?+x.batchKg:null),bu:(x.isSingular&&x.batchUnits>0?+x.batchUnits:null),r:x.ingredients.map(i=>[ALIAS[i.name]||i.name,+i.qty,UNM[String(i.unit).toLowerCase()]||i.unit]).concat(ADD[String(x.id)]||[])}));
   if(!out.length)throw new Error("sem receitas");
   st.prods=out; st.exp=j.exportedAt||""; PRODS=out; save(); status(); buildList(); novos(); render();
  }catch(err){ $("impst").textContent="Não consegui ler esse ficheiro: "+err.message+". Use o backup .json exportado pela app."; } };
@@ -294,6 +294,7 @@ function etq(p,s,c){
  $("op_n").value+' · '+$("op_m").value+($("op_c").value?' · '+$("op_c").value:'')+'</div>';
  return e;
 }
+function yPeso(p,s){ if(!p.bu||!s.wset)return null; const m=String(s.w).replace(",",".").match(/([\d.]+)\s*(kg|g)\b/i); if(!m)return null; const g=parseFloat(m[1])*(m[2].toLowerCase()==="kg"?1000:1); return g>0?p.bu*g/1000:null; }
 function render(){
  const sh=$("sheet"); sh.innerHTML="";
  $("dpv").textContent=dataEt()?("Data na etiqueta: "+dataEt()+($("dv").value?" (data fixa)":" (hoje + "+Math.floor(+$("dd").value)+" dias)")):"Sem data: fica uma linha em branco para escrever à mão.";
@@ -306,7 +307,7 @@ function render(){
  const pages=[]; let cont=[];
  [["1788446270995","Meia Torta de Chocolate"],["1790087134040","Rolos de Canela"]].forEach(([id,n])=>{ if(!PRODS.some(q=>q.id===id))bn(n+": ainda não está nas receitas. Exporte um backup novo da app de gestão e importe-o aqui para gerar a etiqueta."); });
  PRODS.forEach(p=>{ const s=st.p[p.id]; if(!s||!s.on)return;
-  const c=calc(p);
+  const c=calc(p,yPeso(p,s));
   if(c.miss){ bn(p.nome+": falta a composição de "+c.miss.map(m=>m.k).join(", ")+". Preencha na coluna da esquerda."); return; }
   (c.warn||[]).forEach(t=>bn(p.nome+": "+t));
   if(one){ for(let k=0;k<s.n;k++){ const it=Array(skip).fill(null); skip=0; for(let i=it.length;i<per;i++)it.push(etq(p,s,c)); pages.push(it); } }
